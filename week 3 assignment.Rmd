@@ -1,0 +1,174 @@
+---
+title: "Week 3 Assignment"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(reshape2)
+library(ggplot2)
+```
+
+First we load the data from the api.
+
+```{r}
+source_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv"
+dat <- read_csv(source_url)
+```
+We want to see if 2020 is different from previous years. Turns out there are more shootings in 2020 than in 2019.
+
+```{r}
+temp <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2019) %>%
+  group_by(month) %>%
+  summarize(cases_2019 = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2019)
+temp2 <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2020) %>%
+  group_by(month) %>%
+  summarize(cases_2020 = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2020)
+time_series <- merge(temp, temp2, by = 'month', all = TRUE) %>%
+  arrange(month) %>%
+  select(month, cases_2019, cases_2020)
+time_series %>%
+  ggplot(aes(x = month, y = cases_2019)) +
+  geom_line(aes(color = '2019')) +
+  geom_line(aes(y = cases_2020, color = '2020')) +
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(1, 12, by = 1)) +
+  labs(title = 'NY City Shooting Time Series', y = NULL)
+```
+Then we look to see if the increase is in daytime shooting or nighttime shooting. Turns out increase in nighttime shooting is bigger than increase in daytime shooting. This can be explained by the scarcity of people out at night during the covid lockdown, so shooters feel emboldened to shoot people.
+```{r}
+temp <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2019) %>%
+  filter(OCCUR_TIME >= hm('06:00') & OCCUR_TIME < hm('18:00')) %>%
+  group_by(month) %>%
+  summarize(cases_2019_day = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2019_day)
+temp2 <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2020) %>%
+  filter(OCCUR_TIME >= hm('06:00') & OCCUR_TIME < hm('18:00')) %>%
+  group_by(month) %>%
+  summarize(cases_2020_day = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2020_day)
+temp3 <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2019) %>%
+  filter(OCCUR_TIME < hm('06:00') | OCCUR_TIME >= hm('18:00')) %>%
+  group_by(month) %>%
+  summarize(cases_2019_night = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2019_night)
+temp4 <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), month = month(OCCUR_DATE)) %>%
+  filter(year == 2020) %>%
+  filter(OCCUR_TIME < hm('06:00') | OCCUR_TIME >= hm('18:00')) %>%
+  group_by(month) %>%
+  summarize(cases_2020_night = n()) %>%
+  arrange(month) %>%
+  select(month, cases_2020_night)
+time_series2 <- merge(temp, c(temp2, temp3, temp4), by = 'month', all = TRUE) %>%
+  arrange(month) %>%
+  select(month, cases_2019_day, cases_2020_day, cases_2019_night, cases_2020_night)
+time_series2 %>%
+  ggplot(aes(x = month, y = cases_2019_day)) +
+  geom_line(aes(color = '2019_day')) +
+  geom_line(aes(y = cases_2020_day, color = '2020_day')) +
+  geom_line(aes(y = cases_2019_night, color = '2019_night')) +
+  geom_line(aes(y = cases_2020_night, color = '2020_night')) +
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(1, 12, by = 1)) +
+  labs(title = 'NY City Shooting day / night', y = NULL)
+```
+Someone mentioned it feels more dangerous in the streets of NY during the weekend than on weekdays. We can see that in our data too.
+```{r}
+temp <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), day = weekdays(OCCUR_DATE)) %>%
+  filter(year == 2019) %>%
+  group_by(day) %>%
+  summarize(cases_2019 = n()) %>%
+  arrange(day) %>%
+  select(day, cases_2019)
+temp2 <- dat %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  mutate(year = year(OCCUR_DATE), day = weekdays(OCCUR_DATE)) %>%
+  filter(year == 2020) %>%
+  group_by(day) %>%
+  summarize(cases_2020 = n()) %>%
+  arrange(day) %>%
+  select(day, cases_2020)
+time_series3 <- merge(temp, temp2, by = 'day', all = TRUE) %>%
+  arrange(day) %>%
+  select(day, cases_2019, cases_2020)
+time_series3 <- melt(time_series3)
+time_series3$day <- factor(time_series3$day, levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+time_series3 %>%
+  ggplot(aes(x = day, y = value, fill = variable)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 90)) +
+  labs(title = "NY City Shooting Victim Demography", y = NULL)
+```
+How are different ethnic groups affected by the increase in shooting? While every ethnic group's number increases in 2020 from 2019, some groups are still more likely to be shot than others.
+```{r}
+temp <- dat %>%
+  mutate(VIC_RACE = str_replace(VIC_RACE, 'BLACK HISPANIC', 'BLACK')) %>%
+  mutate(VIC_RACE = str_replace(VIC_RACE, 'WHITE HISPANIC', 'WHITE')) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  filter(year(OCCUR_DATE) == 2019) %>%
+  group_by(VIC_RACE) %>%
+  summarize(cases_2019 = n()) %>%
+  select(VIC_RACE, cases_2019)
+temp2 <- dat %>%
+  mutate(VIC_RACE = str_replace(VIC_RACE, 'BLACK HISPANIC', 'BLACK')) %>%
+  mutate(VIC_RACE = str_replace(VIC_RACE, 'WHITE HISPANIC', 'WHITE')) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>%
+  filter(year(OCCUR_DATE) == 2020) %>%
+  group_by(VIC_RACE) %>%
+  summarize(cases_2020 = n()) %>%
+  select(VIC_RACE, cases_2020)
+breakdown <- merge(temp, temp2, by = 'VIC_RACE') %>%
+  arrange(VIC_RACE) %>%
+  select(VIC_RACE, cases_2019, cases_2020)
+breakdown <- melt(breakdown)
+breakdown %>%
+  ggplot(aes(x = VIC_RACE, y = value, fill = variable)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 90)) +
+  labs(title = "NY City Shooting Victim Demography", y = NULL)
+```
+
+```{r}
+dat2 <- read_csv("nyc_racial_composition.csv")
+temp3 <- merge(breakdown, dat2, by='VIC_RACE')
+temp3 <- temp3 %>%
+  mutate(probability = value / n) %>%
+  select(VIC_RACE, variable, probability)
+temp3 %>%
+  ggplot(aes(x = VIC_RACE, y = probability, fill = variable)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle = 90)) +
+  labs(title = "NY City Shooting Victim Probability by Race", y = NULL)
+temp3
+```
+In 2019, black people were 29 times more likely to get shot than asian / pacific islanders. Black people were 6 times more likely to get shot than white people. In 2020, black people were 33 times more likely to get shot that asian / pacific islanders, and 6.5 times more likely to get shot than white people.
